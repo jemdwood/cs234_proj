@@ -25,7 +25,7 @@ except Exception:
 
 RECORD_EVERY  = 2 #record every n frames (should be >= 1)
 RECORD_FILE = './records'
-SCORE_THRESHOLD = 0
+SCORE_THRESHOLD = 4000
 DOWNSAMPLE = 2 
 
 
