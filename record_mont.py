@@ -25,7 +25,7 @@ except Exception:
 
 RECORD_EVERY  = 2 #record every n frames (should be >= 1)
 RECORD_FILE = './records'
-SCORE_THRESHOLD = 4000
+SCORE_THRESHOLD = 3000
 DOWNSAMPLE = 2 
 
 
@@ -37,13 +37,13 @@ def downsample(state):
     Preprocess state (210, 160, 3) image into
     a (80, 80, 1) image in grey scale
     """
-    state = np.reshape(state, [210, 160, 3]).astype(np.float32)
+    #state = np.reshape(state, [210, 160, 3]).astype(np.float32)
 
     # grey scale
     #state = state[:, :, 0] * 0.299 + state[:, :, 1] * 0.587 + state[:, :, 2] * 0.114
 
     # karpathy
-    #state = state[35:195]  # crop
+    state = state[:195]  # crop
     state = state[::DOWNSAMPLE,::DOWNSAMPLE] # downsample by factor of 2
 
     #state = state[:, :, np.newaxis]
@@ -158,15 +158,10 @@ class Recorder():
 			self.current_buffer_score = 0
 			self.sc_thresh = score_threshold
 
-	def compress_obs():
-		# http://stackoverflow.com/questions/10607468/how-to-reduce-the-image-file-size-using-pil
-		pass
-
-
 	def buffer_SARSD(self, prev_obs, obs, action, rew, env_done, info):
 		obs = obs.astype(np.int8)
-		print(obs.shape)
-		print(100928.0/sys.getsizeof(obs), 'x improved')
+		#print(obs.shape)
+		#print(100928.0/sys.getsizeof(obs), 'x improved')
 		#prev_obs = prev_obs.astype(np.float32) #float32 is faster on gpu, supposedly 
 		SARSD = (prev_obs, action, rew, obs, env_done)
 		if(self.imm_flush):
