@@ -25,7 +25,114 @@ except Exception:
 
 RECORD_EVERY  = 2 #record every n frames (should be >= 1)
 RECORD_FILE = './records'
-SCORE_THRESHOLD = 3000
+SCORE_THRESHOLD = 0
+DOWNSAMPLE = 2 
+
+
+
+
+#############
+def downsample(state):
+    """
+    Preprocess state (210, 160, 3) image into
+    a (80, 80, 1) image in grey scale
+    """
+    state = np.reshape(state, [210, 160, 3]).astype(np.float32)
+
+    # grey scale
+    #state = state[:, :, 0] * 0.299 + state[:, :, 1] * 0.587 + state[:, :, 2] * 0.114
+
+    # karpathy
+    #state = state[35:195]  # crop
+    state = state[::DOWNSAMPLE,::DOWNSAMPLE] # downsample by factor of 2
+
+    #state = state[:, :, np.newaxis]
+
+    return state.astype(np.uint8)
+
+
+def blackandwhite(state):
+    """
+    Preprocess state (210, 160, 3) image into
+    a (80, 80, 1) image in grey scale
+    """
+    # erase background
+    state[state==144] = 0
+    state[state==109] = 0
+    state[state!=0] = 1
+
+    # karpathy
+    state = state[35:195]  # crop
+    state = state[::2,::2, 0] # downsample by factor of 2
+
+    state = state[:, :, np.newaxis]
+
+    return state.astype(np.uint8)
+
+from gym import spaces
+from viewer import SimpleImageViewer
+from collections import deque
+class PreproWrapper(gym.Wrapper):
+ 
+    def __init__(self, env, prepro, shape, high=255):
+        """
+        Args:
+            env: (gym env)
+            prepro: (function) to apply to a state for preprocessing
+            shape: (list) shape of obs after prepro
+            overwrite_render: (bool) if True, render is overwriten to vizualise effect of prepro
+            grey_scale: (bool) if True, assume grey scale, else black and white
+            high: (int) max value of state after prepro
+        """
+        super(PreproWrapper, self).__init__(env)
+        self.viewer = None
+        self.prepro = prepro
+        self.observation_space = spaces.Box(low=0, high=high, shape=shape)
+        self.high = high
+
+
+    def _step(self, action):
+        """
+        Overwrites _step function from environment to apply preprocess
+        """
+        obs, reward, done, info = self.env.step(action)
+        self.obs = self.prepro(obs)
+        return self.obs, reward, done, info
+
+
+    def _reset(self):
+        self.obs = self.prepro(self.env.reset())
+        return self.obs
+
+
+    def _render(self, mode='human', close=False):
+        """
+        Overwrite _render function to vizualize preprocessing
+        """
+        if close:
+            if self.viewer is not None:
+                self.viewer.close()
+                self.viewer = None
+            return
+        img = self.obs
+        if mode == 'rgb_array':
+            return img
+        elif mode == 'human':
+            from gym.envs.classic_control import rendering
+            if self.viewer is None:
+                self.viewer = SimpleImageViewer()
+            self.viewer.imshow(img)        
+#############
+
+
+
+
+
+
+
+
+
+
 
 def pickle(obj, f):
 	# spreewalds galore
@@ -57,6 +164,10 @@ class Recorder():
 
 
 	def buffer_SARSD(self, prev_obs, obs, action, rew, env_done, info):
+		obs = obs.astype(np.int8)
+		print(obs.shape)
+		print(100928.0/sys.getsizeof(obs), 'x improved')
+		#prev_obs = prev_obs.astype(np.float32) #float32 is faster on gpu, supposedly 
 		SARSD = (prev_obs, action, rew, obs, env_done)
 		if(self.imm_flush):
 			with open(self.record_file, 'a') as f:
@@ -65,7 +176,7 @@ class Recorder():
 			self.current_buffer_score += rew
 			self.record_buffer.append(SARSD)
 
-	def record(self):
+	def record_eps(self):
 		print('recording from buffer...')
 		if not self.imm_flush:
 			if len(self.record_buffer) > 0:
@@ -177,13 +288,12 @@ def record_game(env, record_file, frames_to_record = RECORD_EVERY , transpose=Tr
 
 	screen = pygame.display.set_mode(video_size)
 	clock = pygame.time.Clock()
-	print(dir(pygame))
 
 	while running:
 		if env_done:
 			env_done = False
 			obs = env.reset()
-			recorder.record() #Records it all at the end of the montezuma episode
+			recorder.record_eps() #Records it all at the end of the montezuma episode
 		else:
 			try:
 				action = keys_to_action[tuple(sorted(pressed_keys))]
@@ -232,7 +342,7 @@ def record_game(env, record_file, frames_to_record = RECORD_EVERY , transpose=Tr
 env = gym.make('MontezumaRevenge-v0')
 wrapper = SkipWrapper(0) # 0 = don't skip
 env = wrapper(env)
-
+env = PreproWrapper(env, prepro=lambda x: downsample(x), shape=(105, 80, 3))
 
 record_game(env, RECORD_FILE, zoom=2)
 
