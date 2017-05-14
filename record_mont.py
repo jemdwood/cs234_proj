@@ -24,10 +24,12 @@ except Exception:
 
 
 RECORD_EVERY  = 2 #record every n frames (should be >= 1)
-RECORD_FILE = './records'
-SCORE_THRESHOLD = 3000
+SCORE_THRESHOLD = 0
 DOWNSAMPLE = 2 
 
+RECORD_FILE = './records.txt'
+RECORD_FOLDER = './records/'
+FILE_EPISODE_DIVIDER = '\n<end_eps>----<end_eps>\n'
 
 
 
@@ -132,27 +134,35 @@ class PreproWrapper(gym.Wrapper):
 
 
 
-
-
+#####################
+# Below is our code #
+#####################
 def pickle(obj, f):
 	# spreewalds galore
-	try:
-		if(type(obj) == type(list) or type(obj) == type(set)):
-			obj = map(json_encode_np, obj)
-		else:
-			obj = json_encode_np(obj)
-	except Exception:
-		pass
-	pick.dump(obj, f)
+	# try:
+	# 	if(type(obj) == type(list) or type(obj) == type(set)):
+	# 		obj = map(json_encode_np, obj)
+	# 	else:
+	# 		obj = json_encode_np(obj)
+	# except Exception:
+		# pass
+	obj = np.array(obj)
+	np.save(f, obj)
+	f.write(FILE_EPISODE_DIVIDER) #TODO???
+	#pick.dump(obj, f)
 
 def unpickle(f):
-	return pick.load(f)
+	pass
+	#TODO
 
 
 class Recorder():
 	def __init__(self, record_file = RECORD_FILE, immediate_flush = False, score_threshold = SCORE_THRESHOLD):
 		self.record_file = record_file
-		self.record_buffer = []	
+		self.SARSD_keys = ['prev_obs', 'obs', 'act', 'rew', 'done']
+		self.record_buffer = dict()
+		for key in self.SARSD_keys:
+			self.record_buffer[key] = []
 		self.imm_flush = immediate_flush
 		if not immediate_flush:
 			self.current_buffer_score = 0
@@ -169,20 +179,34 @@ class Recorder():
 				pickle(SARSD, f)
 		else:
 			self.current_buffer_score += rew
-			self.record_buffer.append(SARSD)
+			#self.record_buffer.append(SARSD)
+			self.record_buffer['prev_obs'].append(prev_obs)
+			self.record_buffer['obs'].append(obs)
+			self.record_buffer['act'].append(action)
+			self.record_buffer['rew'].append(rew)
+			self.record_buffer['done'].append(env_done)
+
 
 	def record_eps(self):
 		print('recording from buffer...')
 		if not self.imm_flush:
-			if len(self.record_buffer) > 0:
+			if len(self.record_buffer['rew']) > 0:
 				if self.current_buffer_score >= self.sc_thresh:
-					with open(self.record_file, 'a') as f:
-						pickle(self.record_buffer, f)
+					for key in self.SARSD_keys:
+						with open(RECORD_FOLDER + key + '_record.txt', 'a') as f:
+							pickle(self.record_buffer[key], f)
+
+
+					# with open(self.record_file, 'a') as f:
+					# 	pickle(self.record_buffer, f)
+					# 	f.write(FILE_EPISODE_DIVIDER)
 					# or should this be the below? Do we want to reconstitute the buffer or
 					# map(lambda x: pickle(x, self.record_file), self.record_buffer)
 				else:
 					print("score too low to bother recording")
-			self.record_buffer = []
+			print('...emptying buffer')
+			for key in self.SARSD_keys:
+				del self.record_buffer[key][:]
 
 		else:
 			print("NOTE: Using immediate buffer flushing, do not use record pls")
