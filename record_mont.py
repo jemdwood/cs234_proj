@@ -23,9 +23,9 @@ except Exception:
 	pass
 
 
-SKIP  = 0
+RECORD_EVERY  = 2 #record every n frames (should be >= 1)
 RECORD_FILE = './records'
-SCORE_THRESHOLD = 1000
+SCORE_THRESHOLD = 3000
 
 def pickle(obj, f):
 	# spreewalds galore
@@ -76,6 +76,7 @@ class Recorder():
 					# map(lambda x: pickle(x, self.record_file), self.record_buffer)
 				else:
 					print("score too low to bother recording")
+			self.record_buffer = []
 
 		else:
 			print("NOTE: Using immediate buffer flushing, do not use record pls")
@@ -97,7 +98,7 @@ def display_arr(screen, arr, video_size, transpose):
 	pyg_img = pygame.transform.scale(pyg_img, video_size)
 	screen.blit(pyg_img, (0,0))
 
-def record_game(env, record_file, frames_to_record = 1 , transpose=True, fps=30, zoom=None, callback=None, keys_to_action=None):
+def record_game(env, record_file, frames_to_record = RECORD_EVERY , transpose=True, fps=30, zoom=None, callback=None, keys_to_action=None):
 	"""
 	For our purposes, modify frames_to_record if you want to not record every single frame. The default value of 1 records every frame
 
@@ -176,6 +177,7 @@ def record_game(env, record_file, frames_to_record = 1 , transpose=True, fps=30,
 
 	screen = pygame.display.set_mode(video_size)
 	clock = pygame.time.Clock()
+	print(dir(pygame))
 
 	while running:
 		if env_done:
@@ -228,7 +230,7 @@ def record_game(env, record_file, frames_to_record = 1 , transpose=True, fps=30,
 
 
 env = gym.make('MontezumaRevenge-v0')
-wrapper = SkipWrapper(SKIP) # 0 = don't skip
+wrapper = SkipWrapper(0) # 0 = don't skip
 env = wrapper(env)
 
 
