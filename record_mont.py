@@ -11,11 +11,18 @@ import sys
 import time
 import matplotlib
 import matplotlib.pyplot as plt
+import random
+import io
 
 import numpy as np
 from collections import deque
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE, VIDEORESIZE
 from threading import Thread
+
+from gym import spaces
+from viewer import SimpleImageViewer
+from collections import deque
+
 
 try:
 	matplotlib.use('GTK3Agg')
@@ -23,57 +30,23 @@ except Exception:
 	pass
 
 
-RECORD_EVERY  = 2 #record every n frames (should be >= 1)
-SCORE_THRESHOLD = 0
-DOWNSAMPLE = 2 
+RECORD_EVERY  = 1 #record every n frames (should be >= 1)
+SCORE_THRESHOLD = 3600
+HORIZ_DOWNSAMPLE =  1#randomDownSample(4)# >= 1 
+VERT_DOWNSAMPLE = 2
+SPEED = 0 
 
 RECORD_FILE = './records.txt'
 RECORD_FOLDER = './records/'
-FILE_EPISODE_DIVIDER = '\n<end_eps>----<end_eps>\n'
+# FILE_EPISODE_DIVIDER = None#'\n<end_eps>----<end_eps>\n'
 
 
 
-#############
 def downsample(state):
-    """
-    Preprocess state (210, 160, 3) image into
-    a (80, 80, 1) image in grey scale
-    """
-    #state = np.reshape(state, [210, 160, 3]).astype(np.float32)
-
-    # grey scale
-    #state = state[:, :, 0] * 0.299 + state[:, :, 1] * 0.587 + state[:, :, 2] * 0.114
-
-    # karpathy
     state = state[:195]  # crop
-    state = state[::DOWNSAMPLE,::DOWNSAMPLE] # downsample by factor of 2
-
-    #state = state[:, :, np.newaxis]
-
+    state = state[::VERT_DOWNSAMPLE,::HORIZ_DOWNSAMPLE] # downsample by factor of 2
     return state.astype(np.uint8)
 
-
-def blackandwhite(state):
-    """
-    Preprocess state (210, 160, 3) image into
-    a (80, 80, 1) image in grey scale
-    """
-    # erase background
-    state[state==144] = 0
-    state[state==109] = 0
-    state[state!=0] = 1
-
-    # karpathy
-    state = state[35:195]  # crop
-    state = state[::2,::2, 0] # downsample by factor of 2
-
-    state = state[:, :, np.newaxis]
-
-    return state.astype(np.uint8)
-
-from gym import spaces
-from viewer import SimpleImageViewer
-from collections import deque
 class PreproWrapper(gym.Wrapper):
  
     def __init__(self, env, prepro, shape, high=255):
@@ -124,38 +97,19 @@ class PreproWrapper(gym.Wrapper):
             if self.viewer is None:
                 self.viewer = SimpleImageViewer()
             self.viewer.imshow(img)        
-#############
 
 
-
-
-
-
-
-
-
-#####################
-# Below is our code #
-#####################
-def pickle(obj, f):
-	# spreewalds galore
-	# try:
-	# 	if(type(obj) == type(list) or type(obj) == type(set)):
-	# 		obj = map(json_encode_np, obj)
-	# 	else:
-	# 		obj = json_encode_np(obj)
-	# except Exception:
-		# pass
-	obj = np.array(obj)
-	np.save(f, obj)
-	f.write(FILE_EPISODE_DIVIDER) #TODO???
-	#pick.dump(obj, f)
-
-def unpickle(f):
-	pass
-	#TODO
-
-
+'''
+General class used to record and retrieve episodes in a numpy format. Unless immediate_flush is set to true,
+the general usage of this class should follow:
+for each episode:
+	while episode is not over, for each SARSD tuple:
+		Recorder.buffer_SARSD(...)
+	Recorder.record_eps()
+... do stuff
+for episode in Recorder.read_episode():
+	do stuff on episode
+'''
 class Recorder():
 	def __init__(self, record_file = RECORD_FILE, immediate_flush = False, score_threshold = SCORE_THRESHOLD):
 		self.record_file = record_file
@@ -168,6 +122,9 @@ class Recorder():
 			self.current_buffer_score = 0
 			self.sc_thresh = score_threshold
 
+	'''
+	Buffers a SARSD tuple but does NOT write to a file unless immediate flushing was set to true
+	'''
 	def buffer_SARSD(self, prev_obs, obs, action, rew, env_done, info):
 		obs = obs.astype(np.int8)
 		#print(obs.shape)
@@ -176,7 +133,7 @@ class Recorder():
 		SARSD = (prev_obs, action, rew, obs, env_done)
 		if(self.imm_flush):
 			with open(self.record_file, 'a') as f:
-				pickle(SARSD, f)
+				pickle(SARSD, f) #immediate flushing pickles objects, pls don't use
 		else:
 			self.current_buffer_score += rew
 			#self.record_buffer.append(SARSD)
@@ -187,40 +144,74 @@ class Recorder():
 			self.record_buffer['done'].append(env_done)
 
 
+	def rec_file_path(self, rec_key):
+		return RECORD_FOLDER + rec_key + '_record.txt'
+
+	def get_key_from_path(self, fp):
+		file_name = fp.split('/')[-1]
+		key = file_name.split('_record.txt')[0]
+		return key
+
+	'''
+	Record Epsidode
+	Call to actually store the buffered episode in the record file. This should be called
+	at the end of every episode (unless the recorder is configured to immediately flush data).
+	'''
 	def record_eps(self):
-		print('recording from buffer...')
 		if not self.imm_flush:
 			if len(self.record_buffer['rew']) > 0:
+				print('recording from buffer...')
 				if self.current_buffer_score >= self.sc_thresh:
 					for key in self.SARSD_keys:
-						with open(RECORD_FOLDER + key + '_record.txt', 'a') as f:
-							pickle(self.record_buffer[key], f)
-
-
-					# with open(self.record_file, 'a') as f:
-					# 	pickle(self.record_buffer, f)
-					# 	f.write(FILE_EPISODE_DIVIDER)
-					# or should this be the below? Do we want to reconstitute the buffer or
-					# map(lambda x: pickle(x, self.record_file), self.record_buffer)
+						with open(self.rec_file_path(key), 'a') as f:
+							obj = np.array(self.record_buffer[key])
+							np.save(f, obj)
+							#f.write(FILE_EPISODE_DIVIDER) #TODO???
+							print('%s recorded' %(key))
 				else:
-					print("score too low to bother recording")
-			print('...emptying buffer')
-			for key in self.SARSD_keys:
-				del self.record_buffer[key][:]
-
+					print("score too low to bother recording -- score = %i" % (self.current_buffer_score))
+				print('...emptying buffer')
+				for key in self.SARSD_keys:
+					del self.record_buffer[key][:]
 		else:
 			print("NOTE: Using immediate buffer flushing, do not use record pls")
 			return
 		self.current_buffer_score = 0
 
+	'''
+	Does not support immediate flushing. Immediate flushing should really just be used for debugging.
+	Returns: a generator over dicts with self.SARSD_keys as the keys, each mapping to their respective data
+	Usage:
+	for episode in Recorder.read_eps():
+		rewards = episode['rew']
+		episode_score = sum(rewards)
+		for t in range(len(rewards)):
+			SARSD_t = map(lambda key: x[key][t], Recorder.SARSD_keys)
+	'''
+	def read_eps(self):
+		file_names = map(self.rec_file_path, self.SARSD_keys)
+		file_d = dict()
+		map(file_d.update, map(lambda fn: {self.get_key_from_path(fn): io.open(fn, 'rb')} , file_names))
 
+		while not True:
+			full_eps_dict = dict()
+			for key in self.SARSD_keys:
+				try:
+					eps_data = np.load(file_d[key])
+					full_eps_dict[key] = eps_data
+				except IOError as e:	
+					map(lambda x: x.close(), file_d.values())
+					return #read is finished
+			yield full_eps_dict
+		
+		
 
 
 
 
 
 #
-# Not ours, and not 100% sure what it's doing
+# Not ours, and not 100% sure what it's doing. Copied from utils.play
 def display_arr(screen, arr, video_size, transpose):
 	arr_min, arr_max = arr.min(), arr.max()
 	arr = 255.0 * (arr - arr_min) / (arr_max - arr_min)
@@ -230,19 +221,8 @@ def display_arr(screen, arr, video_size, transpose):
 
 def record_game(env, record_file, frames_to_record = RECORD_EVERY , transpose=True, fps=30, zoom=None, callback=None, keys_to_action=None):
 	"""
-	For our purposes, modify frames_to_record if you want to not record every single frame. The default value of 1 records every frame
-
-	If you wish to plot real time statistics as you play, you can use
-	PlayPlot. Here's a sample code for plotting the reward
-	for last 5 second of gameplay.
-
-		def callback(obs_t, obs_tp1, rew, done, info):
-			return [rew,]
-		env_plotter = EnvPlotter(callback, 30 * 5, ["reward"])
-
-		env = gym.make("Pong-v3")
-		play_game(env, callback=env_plotter.callback)
-
+	For our purposes, modify frames_to_record if you want to not record every single frame. The default value of 1 records every frame.
+	This method was largely copied from gym.utils.play however it has some modifications to record the data
 
 	Arguments
 	---------
@@ -277,7 +257,7 @@ def record_game(env, record_file, frames_to_record = RECORD_EVERY , transpose=Tr
 			}
 		If None, default key_to_action mapping for that env is used, if provided.
 	"""
-	recorder = Recorder(record_file, immediate_flush = False)
+	recorder = Recorder()
 	obs_s = env.observation_space
 	assert type(obs_s) == gym.spaces.box.Box
 	assert len(obs_s.shape) == 2 or (len(obs_s.shape) == 3 and obs_s.shape[2] in [1,3])
@@ -326,7 +306,7 @@ def record_game(env, record_file, frames_to_record = RECORD_EVERY , transpose=Tr
 				if(time % frames_to_record == 0):
 					recorder.buffer_SARSD(prev_obs, obs, action, rew, env_done, info)
 			except KeyError:
-				print('Don\'t push too many keys you dick')
+				print('Don\'t push too many keys guys')
 		if obs is not None:
 			if len(obs.shape) == 2:
 				obs = obs[:, :, None]
@@ -357,13 +337,13 @@ def record_game(env, record_file, frames_to_record = RECORD_EVERY , transpose=Tr
 	pygame.quit()
 
 
+if __name__ == '__main__':
+	env = gym.make('MontezumaRevenge-v0')
+	wrapper = SkipWrapper(SPEED) # 0 = don't skip
+	env = wrapper(env)
+	env = PreproWrapper(env, prepro=lambda x: downsample(x), shape=(105, 80, 3))
 
-env = gym.make('MontezumaRevenge-v0')
-wrapper = SkipWrapper(0) # 0 = don't skip
-env = wrapper(env)
-env = PreproWrapper(env, prepro=lambda x: downsample(x), shape=(105, 80, 3))
-
-record_game(env, RECORD_FILE, zoom=2)
+	record_game(env, RECORD_FILE, zoom=4)
 
 
 
