@@ -1,4 +1,5 @@
 stor
 gym
 f
-*.pyc
+./*.pyc
+*.DS_Store

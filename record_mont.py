@@ -31,7 +31,7 @@ except Exception:
 
 
 RECORD_EVERY  = 1 #record every n frames (should be >= 1)
-SCORE_THRESHOLD = 3600
+SCORE_THRESHOLD = 3500
 HORIZ_DOWNSAMPLE =  1 # >= 1 
 VERT_DOWNSAMPLE = 2
 SPEED = 0 
