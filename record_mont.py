@@ -31,10 +31,10 @@ except Exception:
 
 
 RECORD_EVERY  = 1 #record every n frames (should be >= 1)
-SCORE_THRESHOLD = 3500
-HORIZ_DOWNSAMPLE =  1 # >= 1 
-VERT_DOWNSAMPLE = 2
-SPEED = 0 
+SCORE_THRESHOLD = 3500 #reasonably hard to achieve score. However the score is honestly oddly set up
+HORIZ_DOWNSAMPLE =  1 # Leave at 1. Other values and you can't see some thin, but critical, parts of the environment
+VERT_DOWNSAMPLE = 1 #1 or 2. I find it harder to do the laser gates when set to 2, but should theoretically be possible
+SPEED = 0 # 0 or 1 at most. I find 1 difficult
 
 RECORD_FILE = './records.txt'
 RECORD_FOLDER = './records/'
