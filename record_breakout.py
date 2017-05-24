@@ -13,7 +13,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import random
 import io
-import os
+import os 
 
 import numpy as np
 from collections import deque
@@ -32,14 +32,14 @@ except Exception:
 
 
 RECORD_EVERY  = 1 #record every n frames (should be >= 1)
-SCORE_THRESHOLD = 3500 #reasonably hard to achieve score. However the score is honestly oddly set up
+SCORE_THRESHOLD = 1 #reasonably hard to achieve score. However the score is honestly oddly set up
 HORIZ_DOWNSAMPLE =  1 # Leave at 1. Other values and you can't see some thin, but critical, parts of the environment
 VERT_DOWNSAMPLE = 1 #1 or 2. I find it harder to do the laser gates when set to 2, but should theoretically be possible
 SPEED = 0 # 0 or 1 at most. I find 1 difficult
-FPS = 5
+FPS = 10
 
 RECORD_FILE = './records.txt'
-RECORD_FOLDER = './records/'
+RECORD_FOLDER = './breakout_records/'
 # FILE_EPISODE_DIVIDER = None#'\n<end_eps>----<end_eps>\n'
 
 
@@ -132,7 +132,6 @@ class Recorder():
 		#print(obs.shape)
 		#print(100928.0/sys.getsizeof(obs), 'x improved')
 		#prev_obs = prev_obs.astype(np.float32) #float32 is faster on gpu, supposedly 
-		
 		SARSD = (prev_obs, action, rew, obs, env_done)
 		if(self.imm_flush):
 			with open(self.record_file, 'a') as f:
@@ -343,7 +342,7 @@ def record_game(env, record_file, frames_to_record = RECORD_EVERY , transpose=Tr
 
 
 if __name__ == '__main__':
-	env = gym.make('MontezumaRevenge-v0')
+	env = gym.make('Breakout-v0')
 	wrapper = SkipWrapper(SPEED) # 0 = don't skip
 	env = wrapper(env)
 	env = PreproWrapper(env, prepro=lambda x: downsample(x), shape=(105, 80, 3))
