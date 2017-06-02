@@ -1,6 +1,6 @@
 import gym
 from gym.wrappers import SkipWrapper
-import cPickle as pick
+import pickle as pick
 # from gym.utils.replay_buffer import ReplayBuffer #IN CASE WE NEED IT LATER!!!
 from gym.utils.json_utils import json_encode_np
 from PIL import Image
@@ -23,12 +23,6 @@ from threading import Thread
 from gym import spaces
 from viewer import SimpleImageViewer
 from collections import deque
-
-
-try:
-	matplotlib.use('GTK3Agg')
-except Exception:
-	pass
 
 
 RECORD_EVERY  = 1 #record every n frames (should be >= 1)
@@ -197,7 +191,7 @@ class Recorder():
 		file_d = dict()
 		map(file_d.update, map(lambda fn: {self.get_key_from_path(fn): io.open(fn, 'rb')} , file_names))
 
-		while not True:
+		while True:
 			full_eps_dict = dict()
 			for key in self.SARSD_keys:
 				try:

@@ -1,6 +1,6 @@
 import gym
 from gym.wrappers import SkipWrapper
-import cPickle as pick
+import pickle as pick
 # from gym.utils.replay_buffer import ReplayBuffer #IN CASE WE NEED IT LATER!!!
 from gym.utils.json_utils import json_encode_np
 from PIL import Image
