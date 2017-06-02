@@ -3,3 +3,4 @@ gym
 ./*.pyc
 *.DS_Store
 *_records
+.env
