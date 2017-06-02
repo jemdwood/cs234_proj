@@ -1,6 +1,8 @@
 stor
 gym
 ./*.pyc
+*.pyc
 *.DS_Store
 *_records
 .env
+train_log
