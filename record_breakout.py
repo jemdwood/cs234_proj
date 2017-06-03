@@ -27,7 +27,7 @@ except ImportError:
 		sys.path.append('/usr/local/lib/python2.7/site-packages')
 		from cv2  import resize
 	except ImportError:
-		print "Could not import cv2, using skimage instead\n"
+		print("Could not import cv2, using skimage instead\n")
 		from skimage.transform import resize
 
 from gym import spaces
