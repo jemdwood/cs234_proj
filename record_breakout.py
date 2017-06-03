@@ -127,7 +127,7 @@ for episode in Recorder.read_episode():
     do stuff on episode
 '''
 class Recorder():
-    def __init__(self, record_folder = RECORD_FOLDER record_file = RECORD_FILE, immediate_flush = False, score_threshold = SCORE_THRESHOLD):
+    def __init__(self, record_folder = RECORD_FOLDER, record_file = RECORD_FILE, immediate_flush = False, score_threshold = SCORE_THRESHOLD):
         self.record_file = record_file
         self.record_folder = record_folder
         self.SARSD_keys = ['prev_obs', 'obs', 'act', 'rew', 'done']
