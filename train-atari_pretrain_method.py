@@ -26,10 +26,11 @@ from tensorpack.tfutils import symbolic_functions as symbf
 from tensorpack.tfutils.gradproc import MapGradient, SummaryGradient
 
 from tensorpack.RL import *
-from a3c_simulator import *
+from simulator import *
 import common
 from common import (play_model, Evaluator, eval_model_multithread,
                     play_one_episode, play_n_episodes)
+from records_dataflow import RecordsDataFlow
 
 if six.PY3:
     from concurrent import futures
@@ -201,7 +202,7 @@ class MySimulatorMaster(SimulatorMaster, Callback):
 
 
 def get_config():
-    dirname = os.path.join('train_log', 'train-atari-{}'.format(ENV_NAME))
+    dirname = os.path.join('train_log', 'pretrain-atari-{}'.format(ENV_NAME))
     logger.set_logger_dir(dirname)
     M = Model()
 
@@ -214,7 +215,7 @@ def get_config():
     start_proc_mask_signal(procs)
 
     master = MySimulatorMaster(namec2s, names2c, M)
-    dataflow = BatchData(DataFromQueue(master.queue), BATCH_SIZE)
+    dataflow = BatchData(RecordsDataFlow('all'), BATCH_SIZE)
     return TrainConfig(
         model=M,
         dataflow=dataflow,
@@ -234,7 +235,7 @@ def get_config():
         ],
         session_creator=sesscreate.NewSessionCreator(
             config=get_default_sess_config(0.5)),
-        steps_per_epoch=STEPS_PER_EPOCH,
+        steps_per_epoch=int(dataflow.size()/BATCH_SIZE),
         max_epoch=1000,
     )
 
