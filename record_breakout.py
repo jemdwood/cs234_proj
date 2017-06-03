@@ -19,7 +19,16 @@ import numpy as np
 from collections import deque
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE, VIDEORESIZE
 from threading import Thread
-import cv2
+try:
+	from cv2 import resize
+except ImportError:
+	try:
+		import sys
+		sys.path.append('/usr/local/lib/python2.7/site-packages')
+		from cv2  import resize
+	except ImportError:
+		print "Could not import cv2, using skimage instead\n"
+		from skimage.transform import resize
 
 from gym import spaces
 from viewer import SimpleImageViewer
@@ -42,7 +51,7 @@ RECORD_FOLDER = './breakout_records/'
 def downsample(state):
     # state = state[:195]  # crop
     # state = state[::VERT_DOWNSAMPLE,::HORIZ_DOWNSAMPLE] # downsample by factor of 2
-    state = cv2.resize(state, (84, 84))
+    state = resize(state, dsize = (84, 84))
     return state.astype(np.uint8)
 
 class PreproWrapper(gym.Wrapper):
