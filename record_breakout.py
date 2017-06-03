@@ -19,6 +19,7 @@ import numpy as np
 from collections import deque
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE, VIDEORESIZE
 from threading import Thread
+import cv2
 
 from gym import spaces
 from viewer import SimpleImageViewer
@@ -41,6 +42,7 @@ RECORD_FOLDER = './breakout_records/'
 def downsample(state):
     state = state[:195]  # crop
     state = state[::VERT_DOWNSAMPLE,::HORIZ_DOWNSAMPLE] # downsample by factor of 2
+    state = cv2.resize(state, (84, 84))
     return state.astype(np.uint8)
 
 class PreproWrapper(gym.Wrapper):
