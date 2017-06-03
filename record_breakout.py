@@ -13,7 +13,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import random
 import io
-import os 
+import os
 
 import numpy as np
 from collections import deque
@@ -25,6 +25,16 @@ from gym import spaces
 from viewer import SimpleImageViewer
 from collections import deque
 
+# have python3 map behave like python2
+import six
+from itertools import starmap
+
+def map(func, *iterables):
+    zipped = six.moves.zip_longest(*iterables)
+    if func is None:
+        # No need for a NOOP lambda here
+        return zipped
+    return list(starmap(func, zipped))
 
 RECORD_EVERY  = 1 #record every n frames (should be >= 1)
 SCORE_THRESHOLD = 15 #reasonably hard to achieve score. However the score is honestly oddly set up
@@ -38,7 +48,6 @@ RECORD_FOLDER = './breakout_records/'
 # FILE_EPISODE_DIVIDER = None#'\n<end_eps>----<end_eps>\n'
 
 
-
 def downsample(state):
     # state = state[:195]  # crop
     # state = state[::VERT_DOWNSAMPLE,::HORIZ_DOWNSAMPLE] # downsample by factor of 2
@@ -46,7 +55,7 @@ def downsample(state):
     return state.astype(np.uint8)
 
 class PreproWrapper(gym.Wrapper):
- 
+
     def __init__(self, env, prepro, shape, high=255):
         """
         Args:
@@ -94,7 +103,7 @@ class PreproWrapper(gym.Wrapper):
             from gym.envs.classic_control import rendering
             if self.viewer is None:
                 self.viewer = SimpleImageViewer()
-            self.viewer.imshow(img)        
+            self.viewer.imshow(img)
 
 
 '''
@@ -127,7 +136,7 @@ class Recorder():
 		obs = obs.astype(np.int8)
 		#print(obs.shape)
 		#print(100928.0/sys.getsizeof(obs), 'x improved')
-		#prev_obs = prev_obs.astype(np.float32) #float32 is faster on gpu, supposedly 
+		#prev_obs = prev_obs.astype(np.float32) #float32 is faster on gpu, supposedly
 		SARSD = (prev_obs, action, rew, obs, env_done)
 		if(self.imm_flush):
 			with open(self.record_file, 'a') as f:
@@ -199,12 +208,12 @@ class Recorder():
 				try:
 					eps_data = np.load(file_d[key])
 					full_eps_dict[key] = eps_data
-				except IOError as e:	
+				except IOError as e:
 					map(lambda x: x.close(), file_d.values())
 					return #read is finished
 			yield full_eps_dict
-		
-		
+
+
 
 
 
