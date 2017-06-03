@@ -44,7 +44,8 @@ CHANNEL = FRAME_HISTORY * 3
 IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
 LOCAL_TIME_MAX = 5
-STEPS_PER_EPOCH = 6000
+#STEPS_PER_EPOCH = 6000
+STEPS_PER_EPOCH = 100
 EVAL_EPISODE = 50
 BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
@@ -201,8 +202,6 @@ class MySimulatorMaster(SimulatorMaster, Callback):
 
 
 def get_config():
-    dirname = os.path.join('train_log', 'train-atari-{}'.format(ENV_NAME))
-    logger.set_logger_dir(dirname)
     M = Model()
 
     name_base = str(uuid.uuid1())[:6]
@@ -243,6 +242,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
     parser.add_argument('--load', help='load model')
+    parser.add_argument('--log', help='load model')
     parser.add_argument('--env', help='env', required=True)
     parser.add_argument('--task', help='task to perform',
                         choices=['play', 'eval', 'train', 'gen_submit'], default='train')
@@ -260,6 +260,12 @@ if __name__ == '__main__':
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     if args.task != 'train':
         assert args.load is not None
+
+    if args.log:
+        dirname = os.path.join('train_log', args.log)
+    else:
+        dirname = os.path.join('train_log', 'train-atari-{}'.format(ENV_NAME))
+    logger.set_logger_dir(dirname)
 
     if args.task != 'train':
         cfg = PredictConfig(

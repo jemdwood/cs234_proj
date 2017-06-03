@@ -206,16 +206,19 @@ def get_config():
     logger.set_logger_dir(dirname)
     M = Model()
 
-    name_base = str(uuid.uuid1())[:6]
-    PIPE_DIR = os.environ.get('TENSORPACK_PIPEDIR', '.').rstrip('/')
-    namec2s = 'ipc://{}/sim-c2s-{}'.format(PIPE_DIR, name_base)
-    names2c = 'ipc://{}/sim-s2c-{}'.format(PIPE_DIR, name_base)
-    procs = [MySimulatorWorker(k, namec2s, names2c) for k in range(SIMULATOR_PROC)]
-    ensure_proc_terminate(procs)
-    start_proc_mask_signal(procs)
+    #name_base = str(uuid.uuid1())[:6]
+    #PIPE_DIR = os.environ.get('TENSORPACK_PIPEDIR', '.').rstrip('/')
+    #namec2s = 'ipc://{}/sim-c2s-{}'.format(PIPE_DIR, name_base)
+    #names2c = 'ipc://{}/sim-s2c-{}'.format(PIPE_DIR, name_base)
+    #procs = [MySimulatorWorker(k, namec2s, names2c) for k in range(SIMULATOR_PROC)]
+    #ensure_proc_terminate(procs)
+    #start_proc_mask_signal(procs)
 
-    master = MySimulatorMaster(namec2s, names2c, M)
-    dataflow = BatchData(RecordsDataFlow('all'), BATCH_SIZE)
+    #master = MySimulatorMaster(namec2s, names2c, M)
+    rec_df = RecordsDataFlow('all')
+    dataflow = BatchData(rec_df, BATCH_SIZE)
+    print('Pre-training dataset size: {} from {} episodes'.format(rec_df.size(), rec_df.num_episodes))
+    print('Average human performance: {}'.format(rec_df.avg_human_score))
     return TrainConfig(
         model=M,
         dataflow=dataflow,
@@ -227,15 +230,15 @@ def get_config():
                                       [(80, 2), (100, 3), (120, 4), (140, 5)]),
             HumanHyperParamSetter('learning_rate'),
             HumanHyperParamSetter('entropy_beta'),
-            master,
-            StartProcOrThread(master),
+            #master,
+            #StartProcOrThread(master),
             PeriodicTrigger(Evaluator(
                 EVAL_EPISODE, ['state'], ['policy'], get_player),
                 every_k_epochs=3),
         ],
         session_creator=sesscreate.NewSessionCreator(
             config=get_default_sess_config(0.5)),
-        steps_per_epoch=int(dataflow.size()/BATCH_SIZE),
+        steps_per_epoch=int(rec_df.size()/BATCH_SIZE),
         max_epoch=1000,
     )
 
