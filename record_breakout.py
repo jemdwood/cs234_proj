@@ -40,8 +40,8 @@ RECORD_FOLDER = './breakout_records/'
 
 
 def downsample(state):
-    state = state[:195]  # crop
-    state = state[::VERT_DOWNSAMPLE,::HORIZ_DOWNSAMPLE] # downsample by factor of 2
+    # state = state[:195]  # crop
+    # state = state[::VERT_DOWNSAMPLE,::HORIZ_DOWNSAMPLE] # downsample by factor of 2
     state = cv2.resize(state, (84, 84))
     return state.astype(np.uint8)
 
