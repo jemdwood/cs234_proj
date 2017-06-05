@@ -92,16 +92,19 @@ def eval_model_multithread(cfg, nr_eval, get_player_fn):
 
 
 class Evaluator(Triggerable):
-    def __init__(self, nr_eval, input_names, output_names, get_player_fn):
+    def __init__(self, nr_eval, input_names, output_names, get_player_fn, mean_score_var=None):
         self.eval_episode = nr_eval
         self.input_names = input_names
         self.output_names = output_names
         self.get_player_fn = get_player_fn
+        self.mean_score_var = mean_score_var
 
     def _setup_graph(self):
         NR_PROC = min(multiprocessing.cpu_count() // 2, 20)
         self.pred_funcs = [self.trainer.get_predictor(
             self.input_names, self.output_names)] * NR_PROC
+        if self.mean_score_var is not None:
+            self.mean_score_var.setup_graph()
 
     def _trigger(self):
         t = time.time()
@@ -112,6 +115,8 @@ class Evaluator(Triggerable):
             self.eval_episode = int(self.eval_episode * 0.94)
         self.trainer.monitors.put('mean_score', mean)
         self.trainer.monitors.put('max_score', max)
+        if self.mean_score_var is not None:
+            self.mean_score_var.set_value(mean)
 
 
 def play_n_episodes(player, predfunc, nr):

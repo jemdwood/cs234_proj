@@ -36,6 +36,11 @@ class RecordsDataFlow(RNGDataFlow):
             a = eps['act']
             r = eps['rew']
 
+            # check for right action space
+            if (a>=4).any():
+                print('drop episode {}'.format(eps_counter))
+                continue
+
             # process states
             s = np.pad(s, ((FRAME_HISTORY-1,FRAME_HISTORY), (0,0), (0,0), (0,0)), 'constant')
             s = np.concatenate([s[i:-(FRAME_HISTORY-i)] for i in range(FRAME_HISTORY)], axis=-1)
@@ -65,14 +70,22 @@ class RecordsDataFlow(RNGDataFlow):
         self.rewards = np.concatenate(rewards, axis=0)
 
         num = self.size()
-        if mode == 'train':
-            self.states = self.states[:int(TRAIN_TEST_SPLIT*num)]
-            self.actions = self.actions[:int(TRAIN_TEST_SPLIT*num)]
-            self.rewards = self.rewards[:int(TRAIN_TEST_SPLIT*num)]
-        elif mode == 'test':
-            self.states = self.states[int(TRAIN_TEST_SPLIT*num):]
-            self.actions = self.actions[int(TRAIN_TEST_SPLIT*num):]
-            self.rewards = self.rewards[int(TRAIN_TEST_SPLIT*num):]
+        if mode != 'all':
+            idxs = list(range(self.size()))
+            # shuffle the same way every time
+            np.random.seed(1)
+            np.random.shuffle(idxs)
+            self.states = self.states[idxs]
+            self.actions = self.actions[idxs]
+            self.rewards = self.rewards[idxs]
+            if mode == 'train':
+                self.states = self.states[:int(TRAIN_TEST_SPLIT*num)]
+                self.actions = self.actions[:int(TRAIN_TEST_SPLIT*num)]
+                self.rewards = self.rewards[:int(TRAIN_TEST_SPLIT*num)]
+            elif mode == 'test':
+                self.states = self.states[int(TRAIN_TEST_SPLIT*num):]
+                self.actions = self.actions[int(TRAIN_TEST_SPLIT*num):]
+                self.rewards = self.rewards[int(TRAIN_TEST_SPLIT*num):]
 
 
 

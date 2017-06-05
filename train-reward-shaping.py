@@ -46,7 +46,7 @@ IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
 LOCAL_TIME_MAX = 5
 #STEPS_PER_EPOCH = 6000
-STEPS_PER_EPOCH = 100
+STEPS_PER_EPOCH = 300
 EVAL_EPISODE = 50
 BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
@@ -57,6 +57,9 @@ EVALUATE_PROC = min(multiprocessing.cpu_count() // 2, 20)
 
 NUM_ACTIONS = None
 ENV_NAME = None
+
+AVG_HUMAN_PERFORMANCE = 28.0
+AVG_CROSS_ENTROPY = 1.38629436112
 
 
 def get_player(viz=False, train=False, dumpdir=None):
@@ -103,9 +106,39 @@ class Model(ModelDesc):
         value = FullyConnected('fc-v', l, 1, nl=tf.identity)
         return logits, value
 
+    def _get_human_action_prediction(self, image):
+        image = tf.cast(image, tf.float32) / 255.0
+        with argscope(Conv2D, nl=tf.nn.relu):
+            l = Conv2D('conv0', image, out_channel=32, kernel_shape=5)
+            l = MaxPooling('pool0', l, 2)
+            l = Conv2D('conv1', l, out_channel=32, kernel_shape=5)
+            l = MaxPooling('pool1', l, 2)
+            l = Conv2D('conv2', l, out_channel=64, kernel_shape=4)
+            l = MaxPooling('pool2', l, 2)
+            l = Conv2D('conv3', l, out_channel=64, kernel_shape=3)
+
+        l = FullyConnected('fc0', l, 512, nl=tf.identity)
+        l = PReLU('prelu', l)
+        logits = FullyConnected('fc-action', l, out_dim=NUM_ACTIONS, nl=tf.identity)    # unnormalized policy
+        return logits
+
     def _build_graph(self, inputs):
         state, action, futurereward = inputs
+        with tf.variable_scope('potential'):
+            action_prediction_logits = self._get_human_action_prediction(state)
+            action_prediction = tf.nn.softmax(action_prediction_logits)
         logits, self.value = self._get_NN_prediction(state)
+        # reward shaping with negative cross_entropy
+        # cross_entropy returns values close to 0 if labels and logits agree
+        # and values growing more and more towards inf if labels and logits disagree
+        mean_score = tf.get_variable('mean_score', shape=[],
+                                     initializer=tf.constant_initializer(0), trainable=False)
+        avg_human_performance = tf.constant(AVG_HUMAN_PERFORMANCE)
+        temperature = tf.nn.relu((avg_human_performance - mean_score)/avg_human_performance, name='temperature')
+        reward_shaping = tf.nn.softmax_cross_entropy_with_logits(labels=action_prediction, logits=logits)
+        reward_shaping = -tf.clip_by_value(reward_shaping, 0.0, AVG_CROSS_ENTROPY)
+        reward = futurereward + temperature * reward_shaping
+
         self.value = tf.squeeze(self.value, [1], name='pred_value')  # (B,)
         self.policy = tf.nn.softmax(logits, name='policy')
 
@@ -133,7 +166,7 @@ class Model(ModelDesc):
         self.cost = tf.truediv(self.cost,
                                tf.cast(tf.shape(futurereward)[0], tf.float32),
                                name='cost')
-        summary.add_moving_summary(policy_loss, xentropy_loss,
+        summary.add_moving_summary(policy_loss, xentropy_loss, temperature,
                                    value_loss, pred_reward, advantage, self.cost)
 
     def _get_optimizer(self):
@@ -229,7 +262,7 @@ def get_config():
             master,
             StartProcOrThread(master),
             PeriodicTrigger(Evaluator(
-                EVAL_EPISODE, ['state'], ['policy'], get_player),
+                EVAL_EPISODE, ['state'], ['policy'], get_player, GraphVarParam('mean_score')),
                 every_k_epochs=3),
         ],
         session_creator=sesscreate.NewSessionCreator(
@@ -242,8 +275,8 @@ def get_config():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
-    parser.add_argument('--load', help='load model')
-    parser.add_argument('--resume', help='load model')
+    parser.add_argument('--load', help='load model if resume | action prediction if not')
+    parser.add_argument('--resume', help='resume training')
     parser.add_argument('--log', help='load model')
     parser.add_argument('--env', help='env', required=True)
     parser.add_argument('--task', help='task to perform',
@@ -260,8 +293,7 @@ if __name__ == '__main__':
 
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-    if args.task != 'train':
-        assert args.load is not None
+    assert args.load is not None
 
     if args.log:
         dirname = os.path.join('train_log', args.log)
@@ -303,11 +335,10 @@ if __name__ == '__main__':
             predict_tower, train_tower = [0], [0]
             trainer = QueueInputTrainer
         config = get_config()
-        if args.load:
-            if args.resume:
-                config.session_init = get_model_loader(args.load)
-            else:
-                config.session_init = SaverRestoreNoGlobalStep(args.load)
+        if args.resume:
+            config.session_init = SaverRestore(args.load)
+        else:
+            config.session_init = SaverRestoreNoGlobalStep(args.load)
         config.tower = train_tower
         config.predict_tower = predict_tower
         trainer(config).train()
