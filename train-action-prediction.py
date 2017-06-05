@@ -38,10 +38,19 @@ PREDICT_BATCH_SIZE = 15     # batch for efficient forward
 PREDICTOR_THREAD_PER_GPU = 3
 PREDICTOR_THREAD = None
 
-NUM_ACTIONS = 4
+REG_LOSS = 1e-4
+NUM_ACTIONS = {
+        'Breakout-v0': 4,
+        'SpaceInvaders-v0': 6,
+        'MsPacman-v0': 9,
+        'MontezumaRevenge-v0': 18,
+}
 
 
 class Model(ModelDesc):
+    def __init__(self, num_actions):
+        self.num_actions = num_actions
+
     def _get_inputs(self):
         assert NUM_ACTIONS is not None
         return [InputDesc(tf.uint8, (None,) + IMAGE_SHAPE3, 'state'),
@@ -61,7 +70,7 @@ class Model(ModelDesc):
 
         l = FullyConnected('fc0', l, 512, nl=tf.identity)
         l = PReLU('prelu', l)
-        logits = FullyConnected('fc-action', l, out_dim=NUM_ACTIONS, nl=tf.identity)    # unnormalized policy
+        logits = FullyConnected('fc-action', l, out_dim=self.num_actions, nl=tf.identity)    # unnormalized policy
         return logits
 
     def _build_graph(self, inputs):
@@ -72,7 +81,12 @@ class Model(ModelDesc):
 
         # a vector of length B with loss of each sample
         cost = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=action)
-        self.cost = tf.reduce_mean(cost, name='cross_entropy_loss')  # the average cross-entropy loss
+        cost = tf.reduce_mean(cost, name='cross_entropy_loss')  # the average cross-entropy loss
+        wd_cost = tf.multiply(REG_LOSS,
+                              regularize_cost('fc.*/W', tf.nn.l2_loss),
+                              name='regularize_loss')
+        self.cost = tf.add_n([wd_cost, cost], name='total_cost')
+        summary.add_moving_summary(cost, wd_cost, self.cost)
 
         # compute the "incorrect vector", for the callback ClassificationError to use at validation time
         wrong = symbf.prediction_incorrect(logits, action, name='incorrect')
@@ -84,7 +98,6 @@ class Model(ModelDesc):
         # 3. print the value after each epoch
         train_error = tf.reduce_mean(wrong, name='train_error')
         summary.add_moving_summary(train_error, accuracy)
-        summary.add_moving_summary(self.cost)
 
     def _get_optimizer(self):
         lr = symbf.get_scalar_var('learning_rate', 0.001, summary=True)
@@ -101,10 +114,10 @@ def get_data():
     rec_test = RecordsDataFlow('test')
     return BatchData(rec_train, BATCH_SIZE), BatchData(rec_test, BATCH_SIZE, remainder=True)
 
-def get_config():
+def get_config(num_actions):
     dirname = os.path.join('train_log', 'action_prediction')
     logger.set_logger_dir(dirname)
-    M = Model()
+    M = Model(num_actions)
 
     dataset_train, dataset_test = get_data()
     # How many iterations you want in each epoch.
@@ -132,11 +145,14 @@ def get_config():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
+    parser.add_argument('--env', help='which env')
     parser.add_argument('--load', help='load model')
     parser.add_argument('--task', help='task to perform',
                         choices=['eval', 'train'], default='train')
     parser.add_argument('--episode', help='number of episode to eval', default=100, type=int)
     args = parser.parse_args()
+
+    assert arg.env is not None
 
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -163,7 +179,7 @@ if __name__ == '__main__':
             PREDICTOR_THREAD = 1
             predict_tower, train_tower = [0], [0]
             trainer = QueueInputTrainer
-        config = get_config()
+        config = get_config(NUM_ACTIONS[args.env])
         if args.load:
             config.session_init = get_model_loader(args.load)
         config.tower = train_tower

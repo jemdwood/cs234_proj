@@ -234,12 +234,12 @@ def get_config():
             #StartProcOrThread(master),
             PeriodicTrigger(Evaluator(
                 EVAL_EPISODE, ['state'], ['policy'], get_player),
-                every_k_epochs=3),
+                every_k_epochs=1),
         ],
         session_creator=sesscreate.NewSessionCreator(
             config=get_default_sess_config(0.5)),
         steps_per_epoch=int(rec_df.size()/BATCH_SIZE),
-        max_epoch=1000,
+        max_epoch=5,
     )
 
 
