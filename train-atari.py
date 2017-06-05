@@ -46,7 +46,7 @@ IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
 LOCAL_TIME_MAX = 5
 #STEPS_PER_EPOCH = 6000
-STEPS_PER_EPOCH = 100
+STEPS_PER_EPOCH = 1000
 EVAL_EPISODE = 50
 BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
@@ -230,7 +230,7 @@ def get_config():
             StartProcOrThread(master),
             PeriodicTrigger(Evaluator(
                 EVAL_EPISODE, ['state'], ['policy'], get_player),
-                every_k_epochs=3),
+                every_k_epochs=1),
         ],
         session_creator=sesscreate.NewSessionCreator(
             config=get_default_sess_config(0.5)),
