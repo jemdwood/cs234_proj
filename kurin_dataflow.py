@@ -5,7 +5,7 @@ from tensorpack import RNGDataFlow
 from record_breakout import Recorder
 import glob
 from scipy import misc
-#from cv2 import resize
+from cv2 import resize
 
 FRAME_HISTORY = 4
 GAMMA = 0.99
@@ -32,7 +32,7 @@ class Kurin_Reader():
         screens = [] # list of screens
         for i in range(1, num_screens+1): # not 0
             image = misc.imread(os.path.join(self.record_folder, 'screens', self.game_name, str(eps_num), str(i)+'.png'))
-            #image = resize(image, dsize = (84, 84))
+            image = resize(image, dsize = (84, 84))
             screens.append(np.expand_dims(image, axis=0)) 
         return np.concatenate(screens, axis=0)
 
@@ -51,7 +51,7 @@ class Kurin_Reader():
         
         
 
-class RecordsDataFlow(RNGDataFlow):
+class KurinDataFlow(RNGDataFlow):
     """
     Produces [state, action, reward] of human demonstrations,
     state is 84x84x12 in the range [0,255], action is an int.
@@ -115,7 +115,7 @@ class RecordsDataFlow(RNGDataFlow):
             rewards.append(r)
 
             eps_counter += 1
-            print 'eps_counter: ', eps_counter
+            print('eps_counter: %d' % eps_counter)
 
         self.avg_human_score = np.mean(scores)
         self.num_episodes = eps_counter
@@ -158,6 +158,5 @@ class RecordsDataFlow(RNGDataFlow):
 
 
 if __name__=='__main__':
-    rdf = RecordsDataFlow('train', 7)
-    #rdf = RecordsDataFlow('train', 6, '/Users/kalpit/Desktop/CS234/cs234_proj/mspacman', 'mspacman')
+    rdf = KurinDataFlow('train', 7, '/data_4/rl/spaceinvaders')
         
