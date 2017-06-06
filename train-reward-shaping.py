@@ -45,8 +45,7 @@ CHANNEL = FRAME_HISTORY * 3
 IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
 LOCAL_TIME_MAX = 5
-#STEPS_PER_EPOCH = 6000
-STEPS_PER_EPOCH = 300
+STEPS_PER_EPOCH = 1000
 EVAL_EPISODE = 50
 BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
@@ -58,8 +57,10 @@ EVALUATE_PROC = min(multiprocessing.cpu_count() // 2, 20)
 NUM_ACTIONS = None
 ENV_NAME = None
 
-AVG_HUMAN_PERFORMANCE = 28.0
-AVG_CROSS_ENTROPY = 1.38629436112
+AVG_HUMAN_PERFORMANCE = {
+    'Breakout-v0': 28.0,
+}
+        
 
 
 def get_player(viz=False, train=False, dumpdir=None):
@@ -83,6 +84,8 @@ class MySimulatorWorker(SimulatorProcess):
 
 
 class Model(ModelDesc):
+    def __init__(self, avg_human_performance):
+        self.avg_human_performance = avg_human_performance
     def _get_inputs(self):
         assert NUM_ACTIONS is not None
         return [InputDesc(tf.uint8, (None,) + IMAGE_SHAPE3, 'state'),
@@ -127,16 +130,18 @@ class Model(ModelDesc):
         with tf.variable_scope('potential'):
             action_prediction_logits = self._get_human_action_prediction(state)
             action_prediction = tf.nn.softmax(action_prediction_logits)
+            action_prediction = tf.stop_gradient(action_prediction)
         logits, self.value = self._get_NN_prediction(state)
         # reward shaping with negative cross_entropy
         # cross_entropy returns values close to 0 if labels and logits agree
         # and values growing more and more towards inf if labels and logits disagree
         mean_score = tf.get_variable('mean_score', shape=[],
                                      initializer=tf.constant_initializer(0), trainable=False)
-        avg_human_performance = tf.constant(AVG_HUMAN_PERFORMANCE)
+        avg_cross_entropy = np.log(1/float(NUM_ACTIONS))
+        avg_human_performance = tf.constant(self.avg_human_performance)
         temperature = tf.nn.relu((avg_human_performance - mean_score)/avg_human_performance, name='temperature')
         reward_shaping = tf.nn.softmax_cross_entropy_with_logits(labels=action_prediction, logits=logits)
-        reward_shaping = -tf.clip_by_value(reward_shaping, 0.0, AVG_CROSS_ENTROPY)
+        reward_shaping = -tf.clip_by_value(reward_shaping, 0.0, avg_cross_entropy)
         reward = futurereward + temperature * reward_shaping
 
         self.value = tf.squeeze(self.value, [1], name='pred_value')  # (B,)
@@ -152,11 +157,11 @@ class Model(ModelDesc):
 
         log_pi_a_given_s = tf.reduce_sum(
             log_probs * tf.one_hot(action, NUM_ACTIONS), 1)
-        advantage = tf.subtract(tf.stop_gradient(self.value), futurereward, name='advantage')
+        advantage = tf.subtract(tf.stop_gradient(self.value), reward, name='advantage')
         policy_loss = tf.reduce_sum(log_pi_a_given_s * advantage, name='policy_loss')
         xentropy_loss = tf.reduce_sum(
             self.policy * log_probs, name='xentropy_loss')
-        value_loss = tf.nn.l2_loss(self.value - futurereward, name='value_loss')
+        value_loss = tf.nn.l2_loss(self.value - reward, name='value_loss')
 
         pred_reward = tf.reduce_mean(self.value, name='predict_reward')
         advantage = symbf.rms(advantage, name='rms_advantage')
@@ -235,8 +240,8 @@ class MySimulatorMaster(SimulatorMaster, Callback):
             client.memory = []
 
 
-def get_config():
-    M = Model()
+def get_config(avg_human_performance):
+    M = Model(avg_human_performance)
 
     name_base = str(uuid.uuid1())[:6]
     PIPE_DIR = os.environ.get('TENSORPACK_PIPEDIR', '.').rstrip('/')
@@ -263,7 +268,7 @@ def get_config():
             StartProcOrThread(master),
             PeriodicTrigger(Evaluator(
                 EVAL_EPISODE, ['state'], ['policy'], get_player, GraphVarParam('mean_score')),
-                every_k_epochs=3),
+                every_k_epochs=1),
         ],
         session_creator=sesscreate.NewSessionCreator(
             config=get_default_sess_config(0.5)),
@@ -334,7 +339,7 @@ if __name__ == '__main__':
             PREDICTOR_THREAD = 1
             predict_tower, train_tower = [0], [0]
             trainer = QueueInputTrainer
-        config = get_config()
+        config = get_config(AVG_HUMAN_PERFORMANCE[args.env])
         if args.resume:
             config.session_init = SaverRestore(args.load)
         else:
