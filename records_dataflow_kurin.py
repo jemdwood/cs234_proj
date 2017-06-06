@@ -19,10 +19,11 @@ class Kurin_Reader():
     def read_eps(self):
         eps_numbers = glob.glob(os.path.join(self.record_folder, 'screens', self.game_name, '*'))
         eps_numbers = [x.split('/')[-1] for x in eps_numbers]
+        eps_numbers = eps_numbers[:5]
         for eps_num in eps_numbers:
-            full_eps_dict = {} # needs to have 'obs', 'act', 'reward'
+            full_eps_dict = {} # needs to have 'obs', 'act', 'rew'
             full_eps_dict['obs'] = self.read_obs(eps_num)
-            full_eps_dict['act'], full_eps_dict['reward'] = self.read_act_reward(eps_num)
+            full_eps_dict['act'], full_eps_dict['rew'] = self.read_act_reward(eps_num)
             yield full_eps_dict
 
     def read_obs(self, eps_num): # [?, 84, 84, 3]
@@ -32,8 +33,23 @@ class Kurin_Reader():
         for i in range(1, num_screens+1): # not 0
             image = misc.imread(os.path.join(self.record_folder, 'screens', self.game_name, str(eps_num), str(i)+'.png'))
             #image = resize(image, dsize = (84, 84))
-            screens.append(image)   
-        return np.concatenate(image)
+            screens.append(np.expand_dims(image, axis=0)) 
+        return np.concatenate(screens, axis=0)
+
+    def read_act_reward(self, eps_num): # [[?, actions], [?, rewards]]
+        acts, rewards = [[], []]
+        with open(os.path.join(self.record_folder, 'trajectories', self.game_name, str(eps_num)+'.txt'), 'r') as f:
+            f.readline() # ignoring headers
+            f.readline() # ignoring headers
+            f.readline() # ignoring headers
+            for line in f:
+                line = line.strip().split(',') # [frame,reward,score,terminal, action]
+                line = [x.strip() for x in line]
+                rewards.append(float(line[1]))
+                acts.append(float(line[4])) 
+        return np.asarray(acts), np.asarray(rewards)
+        
+        
 
 class RecordsDataFlow(RNGDataFlow):
     """
@@ -68,9 +84,14 @@ class RecordsDataFlow(RNGDataFlow):
             a = eps['act']
             r = eps['rew']
 
+            # replace action numbers 11/12 --> 5/6
+            a[a==11] = 5
+            a[a==12] = 6
+
             # check for right action space
             if (a>=self.num_actions).any():
-                print('drop episode {}'.format(eps_counter))
+                print('drop episode {}. Encountered action number {} when expected max action number was {}'
+                      .format(eps_counter, np.max(a), self.num_actions))
                 continue
 
             # process states
@@ -94,6 +115,7 @@ class RecordsDataFlow(RNGDataFlow):
             rewards.append(r)
 
             eps_counter += 1
+            print 'eps_counter: ', eps_counter
 
         self.avg_human_score = np.mean(scores)
         self.num_episodes = eps_counter
@@ -136,5 +158,6 @@ class RecordsDataFlow(RNGDataFlow):
 
 
 if __name__=='__main__':
-    rdf = RecordsDataFlow('train', 4)
+    rdf = RecordsDataFlow('train', 7)
+    #rdf = RecordsDataFlow('train', 6, '/Users/kalpit/Desktop/CS234/cs234_proj/mspacman', 'mspacman')
         
