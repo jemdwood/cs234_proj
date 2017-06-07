@@ -30,7 +30,7 @@ class Kurin_Reader():
 
     def get_eps_numbers(self):
         # gets list of valid episode numbers. Returns only top data_frac fraction of episodes.
-        eps_numbers = glob.glob(os.path.join(self.record_folder, 'screens', GAME_NAMES[self.gym_game_name], '*'))
+        eps_numbers = glob.glob(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'screens', GAME_NAMES[self.gym_game_name], '*'))
         eps_numbers = [x.split('/')[-1] for x in eps_numbers]
         eps_numbers = eps_numbers[:int(self.data_frac*len(eps_numbers))]
         return eps_numbers
@@ -38,7 +38,7 @@ class Kurin_Reader():
     def get_number_total_frames(self):
         number_tot_frames = 0
         for eps_num in self.eps_numbers:
-            number_tot_frames += len(glob.glob(os.path.join(self.record_folder, 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), '*png')))
+            number_tot_frames += len(glob.glob(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), '*png')))
         return number_tot_frames 
                  
     def read_eps(self, skip_episodes=0):
@@ -52,17 +52,17 @@ class Kurin_Reader():
 
     def read_obs(self, eps_num): # [?, 84, 84, 3]
         obs = None
-        num_screens = len(glob.glob(os.path.join(self.record_folder, 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), '*png')))
+        num_screens = len(glob.glob(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), '*png')))
         screens = [] # list of screens
         for i in range(1, num_screens+1): # not 0
-            image = misc.imread(os.path.join(self.record_folder, 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), str(i)+'.png'))
+            image = misc.imread(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), str(i)+'.png'))
             image = resize(image, dsize = (84, 84))
             screens.append(np.expand_dims(image, axis=0)) 
         return np.concatenate(screens, axis=0)
 
     def read_act_reward(self, eps_num): # [[?, actions], [?, rewards]]
         acts, rewards = [[], []]
-        with open(os.path.join(self.record_folder, 'trajectories', GAME_NAMES[self.gym_game_name], str(eps_num)+'.txt'), 'r') as f:
+        with open(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'trajectories', GAME_NAMES[self.gym_game_name], str(eps_num)+'.txt'), 'r') as f:
             f.readline() # ignoring headers
             f.readline() # ignoring headers
             f.readline() # ignoring headers
@@ -70,7 +70,6 @@ class Kurin_Reader():
                 line = line.strip().split(',') # [frame,reward,score,terminal, action]
                 line = [x.strip() for x in line]
                 rewards.append(float(line[1]))
-                acts.append(float(line[4])) 
                 acts.append(self.kurin_to_gym[int(line[4])])
         return np.asarray(acts), np.asarray(rewards)
      
