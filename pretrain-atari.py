@@ -224,8 +224,8 @@ def get_config(env):
         	record_folder=BASE_PATH, gym_game_name=env)
         
     dataflow = BatchData(df, BATCH_SIZE)
-    print('Pre-training dataset size: {} from {} episodes'.format(rec_df.size(), rec_df.num_episodes))
-    print('Average human performance: {}'.format(rec_df.avg_human_score))
+    print('Pre-training dataset size: {}'.format(df.size()))
+    #print('Average human performance: {}'.format(df.avg_human_score))
     return TrainConfig(
         model=M,
         dataflow=dataflow,
@@ -245,7 +245,7 @@ def get_config(env):
         ],
         session_creator=sesscreate.NewSessionCreator(
             config=get_default_sess_config(0.5)),
-        steps_per_epoch=int(rec_df.size()/BATCH_SIZE),
+        steps_per_epoch=dataflow.size(),
         max_epoch=5,
     )
 
