@@ -221,7 +221,7 @@ def get_config(env):
         df = RecordsDataFlow('all')
     else:
         rec_train = KurinDataFlow('all',
-        	record_folder=BASE_PATH, gym_game_name=env, data_frac=0.5)
+        	record_folder=BASE_PATH, gym_game_name=env)
         
     dataflow = BatchData(df, BATCH_SIZE)
     print('Pre-training dataset size: {} from {} episodes'.format(rec_df.size(), rec_df.num_episodes))
