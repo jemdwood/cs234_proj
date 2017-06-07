@@ -20,12 +20,14 @@ GAME_NAMES = {
 }
 
 class Kurin_Reader():
-    def __init__(self, record_folder, gym_game_name, data_frac=1.0):
+    def __init__(self, record_folder, gym_game_name, mode, data_frac=1.0):
         self.record_folder = record_folder
         self.gym_game_name = gym_game_name
         self.kurin_to_gym = self.get_kurin_to_gym_action_map()
         self.data_frac = data_frac
-        self.eps_numbers = self.get_eps_numbers()        
+        self.eps_numbers = sorted(self.get_eps_numbers(), key = lambda x: int(x))
+        self.eps_numbers = self.eps_numbers[:2]
+        self.mode = mode
         self.num_tot_frames = self.get_number_total_frames()
 
     def get_eps_numbers(self):
@@ -38,7 +40,12 @@ class Kurin_Reader():
     def get_number_total_frames(self):
         number_tot_frames = 0
         for eps_num in self.eps_numbers:
-            number_tot_frames += len(glob.glob(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), '*png')))
+            frames = glob.glob(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), '*png'))
+            if self.mode=='train':
+                frames = frames[:int(TRAIN_TEST_SPLIT*len(frames))]
+            elif self.mode=='test':
+                frames = frames[int(TRAIN_TEST_SPLIT*len(frames)):]
+            number_tot_frames += len(frames)
         return number_tot_frames 
                  
     def read_eps(self, skip_episodes=0):
@@ -67,7 +74,7 @@ class Kurin_Reader():
             f.readline() # ignoring headers
             f.readline() # ignoring headers
             for line in f:
-                line = line.strip().split(',') # [frame,reward,score,terminal, action]
+                line = line.strip().split(',')
                 line = [x.strip() for x in line]
                 rewards.append(float(line[1]))
                 acts.append(self.kurin_to_gym[int(line[4])])
@@ -112,7 +119,7 @@ class KurinDataFlow(RNGDataFlow):
         assert mode in ['train', 'test', 'all']
         self.mode = mode
         self.shuffle = mode in ['train', 'all']
-        self.rec = Kurin_Reader(record_folder=record_folder, gym_game_name=gym_game_name, data_frac=data_frac)
+        self.rec = Kurin_Reader(record_folder=record_folder, mode=mode, gym_game_name=gym_game_name, data_frac=data_frac)
         self.eps_batch_size = eps_batch_size
         self.eps_counter = 0
 
@@ -184,6 +191,7 @@ class KurinDataFlow(RNGDataFlow):
 
     def get_data(self):
         counter = 0
+        old_list = []
         while True:
             counter += 1
             if not self.populate_data():
@@ -197,16 +205,17 @@ class KurinDataFlow(RNGDataFlow):
                 state = self.states[k]
                 action = self.actions[k]
                 reward = self.rewards[k]
+                old_list = [state, action, reward]
                 yield [state, action, reward]
+        yield old_list
 
 
 if __name__=='__main__':
     gym_game_name = 'SpaceInvaders-v0'
     data_frac = 1.0
-    eps_batch_size = 3 # set to None to switch off
+    eps_batch_size = 1 # set to None to switch off
     ##def KurinDataFlow(self, mode, record_folder=None, gym_game_name=None, data_frac=1.0, eps_batch_size=10)
     rdf = KurinDataFlow('train', gym_game_name=gym_game_name, data_frac=data_frac, eps_batch_size=eps_batch_size)
-    print rdf.size()
 
     ### TESTING CODE ###
     counter = 0
