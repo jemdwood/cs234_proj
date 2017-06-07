@@ -105,7 +105,8 @@ class KurinDataFlow(RNGDataFlow):
             shuffle (bool): shuffle the dataset
         """
         if record_folder is None:
-            record_folder = '/Users/kalpit/Desktop/CS234/cs234_proj/spaceinvaders'
+            record_folder = '/Users/kalpit/Desktop/CS234/cs234_proj'
+            #record_folder = '/Users/kalpit/Desktop/CS234/cs234_proj/spaceinvaders'
         if gym_game_name is None:
             gym_game_name = 'spaceinvaders'
         assert mode in ['train', 'test', 'all']
@@ -151,6 +152,9 @@ class KurinDataFlow(RNGDataFlow):
             if self.eps_counter % self.eps_batch_size==0:
                 break
 
+        if states==[]:
+            return False
+
         self.avg_human_score = np.mean(scores)
         self.states = np.concatenate(states, axis=0)
         self.actions = np.concatenate(actions, axis=0)
@@ -173,6 +177,7 @@ class KurinDataFlow(RNGDataFlow):
                 self.states = self.states[int(TRAIN_TEST_SPLIT*num):]
                 self.actions = self.actions[int(TRAIN_TEST_SPLIT*num):]
                 self.rewards = self.rewards[int(TRAIN_TEST_SPLIT*num):]
+        return True
 
     def size(self):
         return self.rec.num_tot_frames
@@ -181,11 +186,10 @@ class KurinDataFlow(RNGDataFlow):
         counter = 0
         while True:
             counter += 1
-            self.populate_data()
+            if not self.populate_data():
+                break
             idxs = list(range(self.states.shape[0]))
             len_idxs = len(idxs)
-            if len_idxs==0: # done processing all episodes in dataset
-                break
             if self.shuffle:
                 np.random.shuffle(idxs)
             print('counter: {}  len(idxs): {}'.format(counter, len_idxs))
@@ -202,6 +206,7 @@ if __name__=='__main__':
     eps_batch_size = 3 # set to None to switch off
     ##def KurinDataFlow(self, mode, record_folder=None, gym_game_name=None, data_frac=1.0, eps_batch_size=10)
     rdf = KurinDataFlow('train', gym_game_name=gym_game_name, data_frac=data_frac, eps_batch_size=eps_batch_size)
+    print rdf.size()
 
     ### TESTING CODE ###
     counter = 0
