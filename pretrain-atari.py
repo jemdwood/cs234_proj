@@ -220,7 +220,7 @@ def get_config(env):
     if env == 'Breakout-v0':
         df = RecordsDataFlow('all')
     else:
-        rec_train = KurinDataFlow('all',
+        df = KurinDataFlow('all',
         	record_folder=BASE_PATH, gym_game_name=env)
         
     dataflow = BatchData(df, BATCH_SIZE)
