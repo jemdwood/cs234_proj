@@ -21,6 +21,7 @@ from tensorpack.tfutils.gradproc import MapGradient, SummaryGradient
 
 from tensorpack.RL import *
 from records_dataflow import RecordsDataFlow
+from kurin_dataflow import KurinDataFlow
 
 if six.PY3:
     from concurrent import futures
@@ -37,6 +38,7 @@ BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
 PREDICTOR_THREAD_PER_GPU = 3
 PREDICTOR_THREAD = None
+BASE_PATH = '/data_4/rl'
 
 REG_LOSS = 1e-4
 NUM_ACTIONS = {
@@ -109,24 +111,31 @@ class Model(ModelDesc):
         return opt
 
 
-def get_data():
-    rec_train = RecordsDataFlow('train')
-    rec_test = RecordsDataFlow('test')
+def get_data(env):
+    if env == 'Breakout-v0':
+        rec_train = RecordsDataFlow('train')
+        rec_test = RecordsDataFlow('test')
+    else:
+        rec_train = KurinDataFlow('train', 
+                record_folder=BASE_PATH, gym_game_name=env)
+        rec_test = KurinDataFlow('test', 
+                record_folder=BASE_PATH, gym_game_name=env)
     return BatchData(rec_train, BATCH_SIZE), BatchData(rec_test, BATCH_SIZE, remainder=True)
 
-def get_config(num_actions):
-    dirname = os.path.join('train_log', 'action_prediction')
+def get_config(env):
+    dirname = os.path.join('train_log', 'action_prediction-{}'.format(env))
     logger.set_logger_dir(dirname)
+    num_actions = NUM_ACTIONS[env]
     M = Model(num_actions)
 
-    dataset_train, dataset_test = get_data()
+    dataset_train, dataset_test = get_data(env)
     # How many iterations you want in each epoch.
     # This is the default value, don't actually need to set it in the config
     steps_per_epoch = dataset_train.size()
 
     # get the config which contains everything necessary in a training
     return TrainConfig(
-        model=Model(),
+        model=M,
         dataflow=dataset_train,  # the DataFlow instance for training
         callbacks=[
             ModelSaver(),   # save the model after every epoch
@@ -152,7 +161,7 @@ if __name__ == '__main__':
     parser.add_argument('--episode', help='number of episode to eval', default=100, type=int)
     args = parser.parse_args()
 
-    assert arg.env is not None
+    assert args.env is not None
 
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -179,7 +188,7 @@ if __name__ == '__main__':
             PREDICTOR_THREAD = 1
             predict_tower, train_tower = [0], [0]
             trainer = QueueInputTrainer
-        config = get_config(NUM_ACTIONS[args.env])
+        config = get_config(args.env)
         if args.load:
             config.session_init = get_model_loader(args.load)
         config.tower = train_tower

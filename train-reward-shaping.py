@@ -137,12 +137,15 @@ class Model(ModelDesc):
         # and values growing more and more towards inf if labels and logits disagree
         mean_score = tf.get_variable('mean_score', shape=[],
                                      initializer=tf.constant_initializer(0), trainable=False)
-        avg_cross_entropy = np.log(1/float(NUM_ACTIONS))
+        avg_cross_entropy = -np.log(1/float(NUM_ACTIONS))
         avg_human_performance = tf.constant(self.avg_human_performance)
         temperature = tf.nn.relu((avg_human_performance - mean_score)/avg_human_performance, name='temperature')
-        reward_shaping = tf.nn.softmax_cross_entropy_with_logits(labels=action_prediction, logits=logits)
-        reward_shaping = -tf.clip_by_value(reward_shaping, 0.0, avg_cross_entropy)
-        reward = futurereward + temperature * reward_shaping
+        shaping = tf.nn.softmax_cross_entropy_with_logits(labels=action_prediction, logits=logits)
+        shaping_loss = temperature * tf.reduce_sum(shaping)
+        shaping_beta = tf.get_variable('shaping_beta', shape=[],
+                                  initializer=tf.constant_initializer(0.01), trainable=False)
+        #reward_shaping = -tf.clip_by_value(reward_shaping, 0.0, avg_cross_entropy)
+        summary.add_moving_summary(tf.reduce_mean(futurereward, name='futurereward'), tf.reduce_mean(shaping, name='mean_shaping_loss'))
 
         self.value = tf.squeeze(self.value, [1], name='pred_value')  # (B,)
         self.policy = tf.nn.softmax(logits, name='policy')
@@ -157,17 +160,17 @@ class Model(ModelDesc):
 
         log_pi_a_given_s = tf.reduce_sum(
             log_probs * tf.one_hot(action, NUM_ACTIONS), 1)
-        advantage = tf.subtract(tf.stop_gradient(self.value), reward, name='advantage')
+        advantage = tf.subtract(tf.stop_gradient(self.value), futurereward, name='advantage')
         policy_loss = tf.reduce_sum(log_pi_a_given_s * advantage, name='policy_loss')
         xentropy_loss = tf.reduce_sum(
             self.policy * log_probs, name='xentropy_loss')
-        value_loss = tf.nn.l2_loss(self.value - reward, name='value_loss')
+        value_loss = tf.nn.l2_loss(self.value - futurereward, name='value_loss')
 
         pred_reward = tf.reduce_mean(self.value, name='predict_reward')
         advantage = symbf.rms(advantage, name='rms_advantage')
         entropy_beta = tf.get_variable('entropy_beta', shape=[],
                                        initializer=tf.constant_initializer(0.01), trainable=False)
-        self.cost = tf.add_n([policy_loss, xentropy_loss * entropy_beta, value_loss])
+        self.cost = tf.add_n([policy_loss, xentropy_loss * entropy_beta, value_loss, shaping_beta * shaping_loss])
         self.cost = tf.truediv(self.cost,
                                tf.cast(tf.shape(futurereward)[0], tf.float32),
                                name='cost')

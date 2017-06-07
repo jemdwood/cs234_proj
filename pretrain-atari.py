@@ -31,6 +31,7 @@ import common
 from common import (play_model, Evaluator, eval_model_multithread,
                     play_one_episode, play_n_episodes)
 from records_dataflow import RecordsDataFlow
+from kurin_dataflow import KurinDataFlow
 
 if six.PY3:
     from concurrent import futures
@@ -45,7 +46,6 @@ CHANNEL = FRAME_HISTORY * 3
 IMAGE_SHAPE3 = IMAGE_SIZE + (CHANNEL,)
 
 LOCAL_TIME_MAX = 5
-STEPS_PER_EPOCH = 6000
 EVAL_EPISODE = 50
 BATCH_SIZE = 128
 PREDICT_BATCH_SIZE = 15     # batch for efficient forward
@@ -56,6 +56,7 @@ EVALUATE_PROC = min(multiprocessing.cpu_count() // 2, 20)
 
 NUM_ACTIONS = None
 ENV_NAME = None
+BASE_PATH = '/data_4/rl'
 
 
 def get_player(viz=False, train=False, dumpdir=None):
@@ -201,7 +202,8 @@ class MySimulatorMaster(SimulatorMaster, Callback):
             client.memory = []
 
 
-def get_config():
+def get_config(env):
+    assert NUM_ACTIONS is not None
     dirname = os.path.join('train_log', 'pretrain-atari-{}'.format(ENV_NAME))
     logger.set_logger_dir(dirname)
     M = Model()
@@ -215,8 +217,13 @@ def get_config():
     #start_proc_mask_signal(procs)
 
     #master = MySimulatorMaster(namec2s, names2c, M)
-    rec_df = RecordsDataFlow('all')
-    dataflow = BatchData(rec_df, BATCH_SIZE)
+    if env == 'Breakout-v0':
+        df = RecordsDataFlow('all')
+    else:
+        rec_train = KurinDataFlow('all',
+        	record_folder=BASE_PATH, gym_game_name=env, data_frac=0.5)
+        
+    dataflow = BatchData(df, BATCH_SIZE)
     print('Pre-training dataset size: {} from {} episodes'.format(rec_df.size(), rec_df.num_episodes))
     print('Average human performance: {}'.format(rec_df.avg_human_score))
     return TrainConfig(
@@ -298,7 +305,7 @@ if __name__ == '__main__':
             PREDICTOR_THREAD = 1
             predict_tower, train_tower = [0], [0]
             trainer = QueueInputTrainer
-        config = get_config()
+        config = get_config(args.env)
         if args.load:
             config.session_init = get_model_loader(args.load)
         config.tower = train_tower
