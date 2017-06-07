@@ -25,12 +25,24 @@ class Kurin_Reader():
         self.gym_game_name = gym_game_name
         self.kurin_to_gym = self.get_kurin_to_gym_action_map()
         self.data_frac = data_frac
+        self.eps_numbers = self.get_eps_numbers()        
+        self.num_tot_frames = self.get_number_total_frames()
 
-    def read_eps(self, skip_episodes=0):
+    def get_eps_numbers(self):
+        # gets list of valid episode numbers. Returns only top data_frac fraction of episodes.
         eps_numbers = glob.glob(os.path.join(self.record_folder, 'screens', GAME_NAMES[self.gym_game_name], '*'))
         eps_numbers = [x.split('/')[-1] for x in eps_numbers]
         eps_numbers = eps_numbers[:int(self.data_frac*len(eps_numbers))]
-        for eps_num in eps_numbers[skip_episodes:]:
+        return eps_numbers
+
+    def get_number_total_frames(self):
+        number_tot_frames = 0
+        for eps_num in self.eps_numbers:
+            number_tot_frames += len(glob.glob(os.path.join(self.record_folder, 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), '*png')))
+        return number_tot_frames 
+                 
+    def read_eps(self, skip_episodes=0):
+        for eps_num in self.eps_numbers[skip_episodes:]:
             full_eps_dict = {} # needs to have 'obs', 'act', 'rew'
             full_eps_dict['obs'] = self.read_obs(eps_num)
             full_eps_dict['act'], full_eps_dict['rew'] = self.read_act_reward(eps_num)
@@ -145,9 +157,9 @@ class KurinDataFlow(RNGDataFlow):
         self.actions = np.concatenate(actions, axis=0)
         self.rewards = np.concatenate(rewards, axis=0)
 
-        num = self.size()
+        num = self.states.shape[0]
         if self.mode != 'all':
-            idxs = list(range(self.size()))
+            idxs = list(range(self.states.shape[0]))
             # shuffle the same way every time
             np.random.seed(1)
             np.random.shuffle(idxs)
@@ -164,14 +176,14 @@ class KurinDataFlow(RNGDataFlow):
                 self.rewards = self.rewards[int(TRAIN_TEST_SPLIT*num):]
 
     def size(self):
-        return self.states.shape[0]
+        return self.rec.num_tot_frames
 
     def get_data(self):
         counter = 0
         while True:
             counter += 1
             self.populate_data()
-            idxs = list(range(self.size()))
+            idxs = list(range(self.states.shape[0]))
             len_idxs = len(idxs)
             if len_idxs==0: # done processing all episodes in dataset
                 break
