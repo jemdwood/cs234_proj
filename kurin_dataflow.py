@@ -177,7 +177,7 @@ class KurinDataFlow(RNGDataFlow):
                 break
             if self.shuffle:
                 np.random.shuffle(idxs)
-            print 'counter: {}  len(idxs): {}'.format(counter, len_idxs)
+            print('counter: {}  len(idxs): {}'.format(counter, len_idxs))
             for k in idxs:
                 state = self.states[k]
                 action = self.actions[k]
