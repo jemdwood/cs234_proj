@@ -26,7 +26,6 @@ class Kurin_Reader():
         self.kurin_to_gym = self.get_kurin_to_gym_action_map()
         self.data_frac = data_frac
         self.eps_numbers = sorted(self.get_eps_numbers(), key = lambda x: int(x))
-        self.eps_numbers = self.eps_numbers[:2]
         self.mode = mode
         self.num_tot_frames = self.get_number_total_frames()
 
