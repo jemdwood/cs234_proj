@@ -26,11 +26,11 @@ class Kurin_Reader():
         self.kurin_to_gym = self.get_kurin_to_gym_action_map()
         self.data_frac = data_frac
 
-    def read_eps(self, skip_episodes=0):
-        eps_numbers = glob.glob(os.path.join(self.record_folder, 'screens', GAME_NAMES[self.gym_game_name], '*'))
+    def read_eps(self):
+        eps_numbers = glob.glob(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'screens', GAME_NAMES[self.gym_game_name], '*'))
         eps_numbers = [x.split('/')[-1] for x in eps_numbers]
         eps_numbers = eps_numbers[:int(self.data_frac*len(eps_numbers))]
-        for eps_num in eps_numbers[skip_episodes:]:
+        for eps_num in eps_numbers:
             full_eps_dict = {} # needs to have 'obs', 'act', 'rew'
             full_eps_dict['obs'] = self.read_obs(eps_num)
             full_eps_dict['act'], full_eps_dict['rew'] = self.read_act_reward(eps_num)
@@ -40,17 +40,17 @@ class Kurin_Reader():
 
     def read_obs(self, eps_num): # [?, 84, 84, 3]
         obs = None
-        num_screens = len(glob.glob(os.path.join(self.record_folder, 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), '*png')))
+        num_screens = len(glob.glob(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), '*png')))
         screens = [] # list of screens
         for i in range(1, num_screens+1): # not 0
-            image = misc.imread(os.path.join(self.record_folder, 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), str(i)+'.png'))
+            image = misc.imread(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'screens', GAME_NAMES[self.gym_game_name], str(eps_num), str(i)+'.png'))
             image = resize(image, dsize = (84, 84))
             screens.append(np.expand_dims(image, axis=0)) 
         return np.concatenate(screens, axis=0)
 
     def read_act_reward(self, eps_num): # [[?, actions], [?, rewards]]
         acts, rewards = [[], []]
-        with open(os.path.join(self.record_folder, 'trajectories', GAME_NAMES[self.gym_game_name], str(eps_num)+'.txt'), 'r') as f:
+        with open(os.path.join(self.record_folder, GAME_NAMES[self.gym_game_name], 'trajectories', GAME_NAMES[self.gym_game_name], str(eps_num)+'.txt'), 'r') as f:
             f.readline() # ignoring headers
             f.readline() # ignoring headers
             f.readline() # ignoring headers
@@ -87,7 +87,7 @@ class KurinDataFlow(RNGDataFlow):
     state is 84x84x12 in the range [0,255], action is an int.
     """
 
-    def __init__(self, mode, record_folder=None, gym_game_name=None, data_frac=1.0, eps_batch_size=10):
+    def __init__(self, mode, record_folder=None, gym_game_name=None, data_frac=1.0):
         """
         Args:
             train_or_test (str): either 'train' or 'test'
@@ -100,17 +100,15 @@ class KurinDataFlow(RNGDataFlow):
         assert mode in ['train', 'test', 'all']
         self.mode = mode
         self.shuffle = mode in ['train', 'all']
-        self.rec = Kurin_Reader(record_folder=record_folder, gym_game_name=gym_game_name, data_frac=data_frac)
-        self.eps_batch_size = eps_batch_size
-        self.eps_counter = 0
 
-    def populate_data(self):
         states = []
         actions = []
         rewards = []
         scores = []
 
-        for eps in self.rec.read_eps(self.eps_counter):
+        rec = Kurin_Reader(record_folder=record_folder, gym_game_name=gym_game_name, data_frac=data_frac)
+        eps_counter = 0
+        for eps in rec.read_eps():
             s = eps['obs']
             a = eps['act']
             r = eps['rew']
@@ -135,18 +133,17 @@ class KurinDataFlow(RNGDataFlow):
                 r[idx] = R
             rewards.append(r)
 
-            self.eps_counter += 1
-            print('eps_counter: %d' % self.eps_counter)
-            if self.eps_counter % self.eps_batch_size==0:
-                break
+            eps_counter += 1
+            print('eps_counter: %d' % eps_counter)
 
         self.avg_human_score = np.mean(scores)
+        self.num_episodes = eps_counter
         self.states = np.concatenate(states, axis=0)
         self.actions = np.concatenate(actions, axis=0)
         self.rewards = np.concatenate(rewards, axis=0)
 
         num = self.size()
-        if self.mode != 'all':
+        if mode != 'all':
             idxs = list(range(self.size()))
             # shuffle the same way every time
             np.random.seed(1)
@@ -154,46 +151,37 @@ class KurinDataFlow(RNGDataFlow):
             self.states = self.states[idxs]
             self.actions = self.actions[idxs]
             self.rewards = self.rewards[idxs]
-            if self.mode == 'train':
+            if mode == 'train':
                 self.states = self.states[:int(TRAIN_TEST_SPLIT*num)]
                 self.actions = self.actions[:int(TRAIN_TEST_SPLIT*num)]
                 self.rewards = self.rewards[:int(TRAIN_TEST_SPLIT*num)]
-            elif self.mode == 'test':
+            elif mode == 'test':
                 self.states = self.states[int(TRAIN_TEST_SPLIT*num):]
                 self.actions = self.actions[int(TRAIN_TEST_SPLIT*num):]
                 self.rewards = self.rewards[int(TRAIN_TEST_SPLIT*num):]
+
+
 
     def size(self):
         return self.states.shape[0]
 
     def get_data(self):
-        counter = 0
-        while True:
-            counter += 1
-            self.populate_data()
-            idxs = list(range(self.size()))
-            len_idxs = len(idxs)
-            if len_idxs==0: # done processing all episodes in dataset
-                break
-            if self.shuffle:
-                np.random.shuffle(idxs)
-            print 'counter: {}  len(idxs): {}'.format(counter, len_idxs)
-            for k in idxs:
-                state = self.states[k]
-                action = self.actions[k]
-                reward = self.rewards[k]
-                yield [state, action, reward]
+        idxs = list(range(self.size()))
+        if self.shuffle:
+            self.rng.shuffle(idxs)
+        for k in idxs:
+            state = self.states[k]
+            action = self.actions[k]
+            reward = self.rewards[k]
+            yield [state, action, reward]
+     
 
 
 if __name__=='__main__':
     gym_game_name = 'SpaceInvaders-v0'
     data_frac = 1.0
-    eps_batch_size = 3 # set to None to switch off
-    ##def KurinDataFlow(self, mode, record_folder=None, gym_game_name=None, data_frac=1.0, eps_batch_size=10)
-    rdf = KurinDataFlow('train', gym_game_name=gym_game_name, data_frac=data_frac, eps_batch_size=eps_batch_size)
-
-    ### TESTING CODE ###
-    counter = 0
-    for x in rdf.get_data(): 
-        counter += 1
+    ##def KurinDataFlow(mode, record_folder=None, game_name=None, read_from_npy=True)
+    #rdf = KurinDataFlow('train', 9, record_folder='/Users/kalpit/Desktop/CS234/cs234_proj/mspacman', game_name='mspacman')
+    rdf = KurinDataFlow('train', gym_game_name=gym_game_name, data_frac=data_frac)
+        
 
